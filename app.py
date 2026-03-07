@@ -65,7 +65,7 @@ st.markdown('<div class="sub-text">Deep Learning Powered Real-Time Mask Detectio
 # ---------------- LOAD MODELS ----------------
 @st.cache_resource
 def load_models():
-    model = load_model("mask_detector.keras")
+    model = load_model("mask_detector.keras", compile=False)
     prototxtPath = "face_detector/deploy.prototxt"
     weightsPath = "face_detector/res10_300x300_ssd_iter_140000.caffemodel"
     faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)

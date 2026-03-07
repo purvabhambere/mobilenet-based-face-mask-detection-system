@@ -6,3 +6,4 @@ imutils
 scikit-learn
 pillow
 matplotlib
+h5py
