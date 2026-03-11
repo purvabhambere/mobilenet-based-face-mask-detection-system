@@ -1,6 +1,7 @@
 import streamlit as st
 import cv2
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
@@ -65,7 +66,16 @@ st.markdown('<div class="sub-text">Deep Learning Powered Real-Time Mask Detectio
 # ---------------- LOAD MODELS ----------------
 @st.cache_resource
 def load_models():
-    model = load_model("mask_detector.keras", compile=False)
+    # Try loading .keras first, fall back to .h5 if it fails
+    try:
+        model = load_model("mask_detector.keras", compile=False)
+    except Exception:
+        try:
+            model = load_model("mask_detector.h5", compile=False)
+        except Exception as e:
+            st.error(f"❌ Could not load model: {e}")
+            st.stop()
+
     prototxtPath = "face_detector/deploy.prototxt"
     weightsPath = "face_detector/res10_300x300_ssd_iter_140000.caffemodel"
     faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)
@@ -142,13 +152,15 @@ if mode == "Upload Image":
         st.image(result, channels="BGR", use_column_width=True)
 
 elif mode == "Live Webcam":
-    if st.button("🎥 Start Webcam"):
+    st.warning("⚠️ Webcam is not supported on Streamlit Cloud. Please run locally for live detection.")
+    if st.button("🎥 Start Webcam (Local Only)"):
         cap = cv2.VideoCapture(0)
         stframe = st.empty()
+        stop_button = st.button("⏹ Stop Webcam")
 
-        while True:
+        while cap.isOpened():
             ret, frame = cap.read()
-            if not ret:
+            if not ret or stop_button:
                 break
 
             result = detect_mask(frame)
