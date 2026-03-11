@@ -54,28 +54,59 @@ st.markdown("""
 st.markdown('<div class="main-title">😷 AI Face Mask Detection System</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-text">Deep Learning Powered Real-Time Mask Detection using MobileNetV2</div>', unsafe_allow_html=True)
 
+# ---------------- RESOLVE BASE PATH ----------------
+# This ensures files are found whether running locally or on Streamlit Cloud
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def get_path(filename):
+    return os.path.join(BASE_DIR, filename)
+
 # ---------------- LOAD MODELS ----------------
 @st.cache_resource
 def load_models():
-    # Try .keras first, then .h5 as fallback
     model = None
-    for model_path in ["mask_detector.keras", "mask_detector.h5"]:
+
+    # Search for model in multiple possible locations
+    model_candidates = [
+        get_path("mask_detector.keras"),
+        get_path("mask_detector.h5"),
+        "mask_detector.keras",
+        "mask_detector.h5",
+    ]
+
+    for model_path in model_candidates:
         if os.path.exists(model_path):
             try:
-                # Use tf.keras.models.load_model to avoid standalone keras version conflicts
                 model = tf.keras.models.load_model(model_path, compile=False)
-                st.success(f"✅ Model loaded from {model_path}")
+                st.success(f"✅ Model loaded: {os.path.basename(model_path)}")
                 break
             except Exception as e:
-                st.warning(f"⚠️ Failed to load {model_path}: {e}")
+                st.warning(f"⚠️ Could not load {os.path.basename(model_path)}: {e}")
                 continue
 
     if model is None:
-        st.error("❌ No model file found! Make sure mask_detector.keras or mask_detector.h5 is in the repo.")
+        # Show debug info to help diagnose
+        st.error("❌ Model file not found. Debug info below:")
+        st.code(f"BASE_DIR: {BASE_DIR}\nCWD: {os.getcwd()}\nFiles in BASE_DIR: {os.listdir(BASE_DIR)}")
         st.stop()
 
-    prototxtPath = "face_detector/deploy.prototxt"
-    weightsPath = "face_detector/res10_300x300_ssd_iter_140000.caffemodel"
+    # Load face detector
+    prototxt_candidates = [
+        get_path("face_detector/deploy.prototxt"),
+        "face_detector/deploy.prototxt",
+    ]
+    weights_candidates = [
+        get_path("face_detector/res10_300x300_ssd_iter_140000.caffemodel"),
+        "face_detector/res10_300x300_ssd_iter_140000.caffemodel",
+    ]
+
+    prototxtPath = next((p for p in prototxt_candidates if os.path.exists(p)), None)
+    weightsPath = next((p for p in weights_candidates if os.path.exists(p)), None)
+
+    if not prototxtPath or not weightsPath:
+        st.error(f"❌ Face detector files not found!\nLooked in: {prototxt_candidates}")
+        st.stop()
+
     faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)
     return model, faceNet
 
@@ -100,7 +131,6 @@ def detect_mask(frame):
             if face.size == 0:
                 continue
 
-            # Convert BGR to RGB for MobileNetV2
             face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
             face = cv2.resize(face, (224, 224))
             face = preprocess_input(face)
