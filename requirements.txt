@@ -8,3 +8,6 @@ pillow
 matplotlib
 h5py
 protobuf==3.20.3
+streamlit-webrtc
+av
+typing-extensions<4.6.0
