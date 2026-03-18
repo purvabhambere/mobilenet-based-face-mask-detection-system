@@ -3,6 +3,8 @@ import cv2
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+import av
 import os
 
 st.set_page_config(page_title="AI Face Mask Detector", page_icon="😷", layout="wide")
@@ -79,12 +81,12 @@ def detect_mask(frame):
             if face.size == 0:
                 continue
 
-            face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
-            face = cv2.resize(face, (224, 224))
-            face = preprocess_input(face)
-            face = np.expand_dims(face, axis=0)
+            face_rgb = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
+            face_rgb = cv2.resize(face_rgb, (224, 224))
+            face_rgb = preprocess_input(face_rgb)
+            face_rgb = np.expand_dims(face_rgb, axis=0)
 
-            (mask, withoutMask) = model.predict(face, verbose=0)[0]
+            (mask, withoutMask) = model.predict(face_rgb, verbose=0)[0]
             label = "Mask" if mask > withoutMask else "No Mask"
             color = (0, 255, 150) if label == "Mask" else (0, 0, 255)
 
@@ -93,10 +95,28 @@ def detect_mask(frame):
             cv2.rectangle(frame, (startX, startY), (endX, endY), color, 3)
     return frame
 
-IS_CLOUD = os.environ.get("STREAMLIT_SHARING_MODE") or os.environ.get("IS_STREAMLIT_CLOUD")
+# WebRTC video processor class
+class MaskDetectionProcessor(VideoProcessorBase):
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        img = detect_mask(img)
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+# RTC config with public STUN servers for reliable connection on mobile
+RTC_CONFIGURATION = RTCConfiguration({
+    "iceServers": [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+    ]
+})
 
 st.sidebar.title("⚙ Settings")
-mode = st.sidebar.radio("Select Mode:", ["Upload Image", "Camera (Mobile & Desktop)", "Live Webcam (Local Only)"])
+mode = st.sidebar.radio("Select Mode:", [
+    "Upload Image",
+    "Live Camera (Mobile & Desktop)",
+    "Take Photo",
+    "Live Webcam (Local Only)"
+])
 st.sidebar.markdown("---")
 
 # ---------------- UPLOAD IMAGE ----------------
@@ -109,11 +129,20 @@ if mode == "Upload Image":
         result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
         st.image(result_rgb, use_container_width=True)
 
-# ---------------- CAMERA - WORKS ON MOBILE & DESKTOP ----------------
-elif mode == "Camera (Mobile & Desktop)":
-    st.info("📱 Works on both mobile and desktop! Allow camera access when prompted.")
-    camera_image = st.camera_input("📷 Take a photo to detect mask")
+# ---------------- LIVE CAMERA - WORKS ON MOBILE & DESKTOP ----------------
+elif mode == "Live Camera (Mobile & Desktop)":
+    st.info("📱 Works on mobile and desktop! Click START and allow camera access.")
+    webrtc_streamer(
+        key="mask-detection",
+        video_processor_factory=MaskDetectionProcessor,
+        rtc_configuration=RTC_CONFIGURATION,
+        media_stream_constraints={"video": True, "audio": False},
+    )
 
+# ---------------- TAKE PHOTO ----------------
+elif mode == "Take Photo":
+    st.info("📷 Take a single photo for mask detection.")
+    camera_image = st.camera_input("Take a photo")
     if camera_image is not None:
         file_bytes = np.asarray(bytearray(camera_image.read()), dtype=np.uint8)
         image = cv2.imdecode(file_bytes, 1)
@@ -123,28 +152,22 @@ elif mode == "Camera (Mobile & Desktop)":
 
 # ---------------- LIVE WEBCAM - LOCAL ONLY ----------------
 elif mode == "Live Webcam (Local Only)":
-    if IS_CLOUD:
-        st.warning("⚠️ Live Webcam is not supported on Streamlit Cloud. Use 'Camera' mode instead.")
-    else:
-        run = st.checkbox("▶ START Webcam")
-        FRAME_WINDOW = st.empty()
-
-        if run:
-            cap = cv2.VideoCapture(0)
-            if not cap.isOpened():
-                st.error("❌ Could not access webcam.")
-            else:
-                while run:
-                    ret, frame = cap.read()
-                    if not ret:
-                        st.error("❌ Failed to read from webcam.")
-                        break
-                    result = detect_mask(frame)
-                    result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
-                    FRAME_WINDOW.image(result_rgb, use_container_width=True)
-                cap.release()
+    run = st.checkbox("▶ START Webcam")
+    FRAME_WINDOW = st.empty()
+    if run:
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            st.error("❌ Could not access webcam.")
         else:
-            FRAME_WINDOW.empty()
+            while run:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                result = detect_mask(frame)
+                result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+                FRAME_WINDOW.image(result_rgb, use_container_width=True)
+            cap.release()
+    else:
+        FRAME_WINDOW.empty()
 
 st.markdown("---")
-st.markdown("<center>🚀 Built with Streamlit | Deep Learning Project | Attractive UI Version</center>", unsafe_allow_html=True)
