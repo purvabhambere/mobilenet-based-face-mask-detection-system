@@ -133,4 +133,4 @@ elif mode == "Live Webcam":
             FRAME_WINDOW.empty()
 
 st.markdown("---")
-st.markdown("<center>🚀 Built with Streamlit | Deep Learning Project | Attractive UI Version</center>", unsafe_allow_html=True)
+st.markdown("<center>Deep Learning Project</center>", unsafe_allow_html=True)
