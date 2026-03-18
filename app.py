@@ -3,8 +3,6 @@ import cv2
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
-import av
 import os
 
 st.set_page_config(page_title="AI Face Mask Detector", page_icon="😷", layout="wide")
@@ -95,32 +93,28 @@ def detect_mask(frame):
             cv2.rectangle(frame, (startX, startY), (endX, endY), color, 3)
     return frame
 
-# WebRTC video processor class
-class MaskDetectionProcessor(VideoProcessorBase):
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        img = detect_mask(img)
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-# RTC config with public STUN servers for reliable connection on mobile
-RTC_CONFIGURATION = RTCConfiguration({
-    "iceServers": [
-        {"urls": ["stun:stun.l.google.com:19302"]},
-        {"urls": ["stun:stun1.l.google.com:19302"]},
-    ]
-})
+# Detect environment
+IS_CLOUD = os.environ.get("STREAMLIT_SHARING_MODE") or os.environ.get("IS_STREAMLIT_CLOUD")
 
 st.sidebar.title("⚙ Settings")
-mode = st.sidebar.radio("Select Mode:", [
-    "Upload Image",
-    "Live Camera (Mobile & Desktop)",
-    "Take Photo",
-    "Live Webcam (Local Only)"
-])
+
+# Show different modes based on environment
+if IS_CLOUD:
+    mode = st.sidebar.radio("Select Mode:", [
+        "📤 Upload Image",
+        "📷 Camera (Photo)"
+    ])
+else:
+    mode = st.sidebar.radio("Select Mode:", [
+        "📤 Upload Image",
+        "📷 Camera (Photo)",
+        "🎥 Live Webcam"
+    ])
+
 st.sidebar.markdown("---")
 
 # ---------------- UPLOAD IMAGE ----------------
-if mode == "Upload Image":
+if mode == "📤 Upload Image":
     uploaded_file = st.file_uploader("📤 Upload an Image", type=["jpg", "png", "jpeg"])
     if uploaded_file is not None:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
@@ -129,20 +123,10 @@ if mode == "Upload Image":
         result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
         st.image(result_rgb, use_container_width=True)
 
-# ---------------- LIVE CAMERA - WORKS ON MOBILE & DESKTOP ----------------
-elif mode == "Live Camera (Mobile & Desktop)":
-    st.info("📱 Works on mobile and desktop! Click START and allow camera access.")
-    webrtc_streamer(
-        key="mask-detection",
-        video_processor_factory=MaskDetectionProcessor,
-        rtc_configuration=RTC_CONFIGURATION,
-        media_stream_constraints={"video": True, "audio": False},
-    )
-
-# ---------------- TAKE PHOTO ----------------
-elif mode == "Take Photo":
-    st.info("📷 Take a single photo for mask detection.")
-    camera_image = st.camera_input("Take a photo")
+# ---------------- CAMERA PHOTO - WORKS ON MOBILE & DESKTOP ----------------
+elif mode == "📷 Camera (Photo)":
+    st.info("📱 Point your camera at a face and take a photo to detect mask. Works on mobile & desktop!")
+    camera_image = st.camera_input("📷 Take a photo")
     if camera_image is not None:
         file_bytes = np.asarray(bytearray(camera_image.read()), dtype=np.uint8)
         image = cv2.imdecode(file_bytes, 1)
@@ -151,7 +135,7 @@ elif mode == "Take Photo":
         st.image(result_rgb, use_container_width=True)
 
 # ---------------- LIVE WEBCAM - LOCAL ONLY ----------------
-elif mode == "Live Webcam (Local Only)":
+elif mode == "🎥 Live Webcam":
     run = st.checkbox("▶ START Webcam")
     FRAME_WINDOW = st.empty()
     if run:
