@@ -41,7 +41,7 @@ def load_models():
         if os.path.exists(fpath):
             try:
                 model = tf.keras.models.load_model(fpath, compile=False)
-                break  # silently loaded — no success message shown
+                break
             except Exception:
                 continue
 
@@ -96,9 +96,10 @@ def detect_mask(frame):
 IS_CLOUD = os.environ.get("STREAMLIT_SHARING_MODE") or os.environ.get("IS_STREAMLIT_CLOUD")
 
 st.sidebar.title("⚙ Settings")
-mode = st.sidebar.radio("Select Mode:", ["Upload Image", "Live Webcam"])
+mode = st.sidebar.radio("Select Mode:", ["Upload Image", "Camera (Mobile & Desktop)", "Live Webcam (Local Only)"])
 st.sidebar.markdown("---")
 
+# ---------------- UPLOAD IMAGE ----------------
 if mode == "Upload Image":
     uploaded_file = st.file_uploader("📤 Upload an Image", type=["jpg", "png", "jpeg"])
     if uploaded_file is not None:
@@ -108,9 +109,22 @@ if mode == "Upload Image":
         result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
         st.image(result_rgb, use_container_width=True)
 
-elif mode == "Live Webcam":
+# ---------------- CAMERA - WORKS ON MOBILE & DESKTOP ----------------
+elif mode == "Camera (Mobile & Desktop)":
+    st.info("📱 Works on both mobile and desktop! Allow camera access when prompted.")
+    camera_image = st.camera_input("📷 Take a photo to detect mask")
+
+    if camera_image is not None:
+        file_bytes = np.asarray(bytearray(camera_image.read()), dtype=np.uint8)
+        image = cv2.imdecode(file_bytes, 1)
+        result = detect_mask(image)
+        result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+        st.image(result_rgb, use_container_width=True)
+
+# ---------------- LIVE WEBCAM - LOCAL ONLY ----------------
+elif mode == "Live Webcam (Local Only)":
     if IS_CLOUD:
-        st.warning("⚠️ Webcam is not supported on Streamlit Cloud. Please run locally.")
+        st.warning("⚠️ Live Webcam is not supported on Streamlit Cloud. Use 'Camera' mode instead.")
     else:
         run = st.checkbox("▶ START Webcam")
         FRAME_WINDOW = st.empty()
@@ -133,4 +147,4 @@ elif mode == "Live Webcam":
             FRAME_WINDOW.empty()
 
 st.markdown("---")
-
+st.markdown("<center>🚀 Built with Streamlit | Deep Learning Project | Attractive UI Version</center>", unsafe_allow_html=True)
