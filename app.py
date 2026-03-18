@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 import os
+import socket
 
 st.set_page_config(page_title="AI Face Mask Detector", page_icon="😷", layout="wide")
 
@@ -32,6 +33,10 @@ st.markdown('<div class="main-title">😷 AI Face Mask Detection System</div>', 
 st.markdown('<div class="sub-text">Deep Learning Powered Real-Time Mask Detection using MobileNetV2</div>', unsafe_allow_html=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Detect if running on Streamlit Cloud
+# On cloud: /mount/src/... path, locally: user's own path
+IS_CLOUD = BASE_DIR.startswith("/mount/src")
 
 @st.cache_resource
 def load_models():
@@ -93,12 +98,8 @@ def detect_mask(frame):
             cv2.rectangle(frame, (startX, startY), (endX, endY), color, 3)
     return frame
 
-# Detect environment
-IS_CLOUD = os.environ.get("STREAMLIT_SHARING_MODE") or os.environ.get("IS_STREAMLIT_CLOUD")
-
 st.sidebar.title("⚙ Settings")
 
-# Show different modes based on environment
 if IS_CLOUD:
     mode = st.sidebar.radio("Select Mode:", [
         "📤 Upload Image",
@@ -123,9 +124,9 @@ if mode == "📤 Upload Image":
         result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
         st.image(result_rgb, use_container_width=True)
 
-# ---------------- CAMERA PHOTO - WORKS ON MOBILE & DESKTOP ----------------
+# ---------------- CAMERA PHOTO ----------------
 elif mode == "📷 Camera (Photo)":
-    st.info("📱 Point your camera at a face and take a photo to detect mask. Works on mobile & desktop!")
+    st.info("📱 Works on mobile & desktop! Take a photo to detect mask.")
     camera_image = st.camera_input("📷 Take a photo")
     if camera_image is not None:
         file_bytes = np.asarray(bytearray(camera_image.read()), dtype=np.uint8)
